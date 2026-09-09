@@ -1,0 +1,69 @@
+
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Auto Cinematic Editor Cloud</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#080b10;color:#eee;font-family:system-ui,-apple-system,Segoe UI,sans-serif}
+.wrap{max-width:1050px;margin:auto;padding:18px}.hero{padding:10px 0 18px}h1{margin:0;font-size:28px}.sub{color:#98a3b1}
+.card{background:#151a22;border:1px solid #28303c;border-radius:16px;padding:16px;margin:12px 0}.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.full{grid-column:1/-1}.field{background:#0e1218;border-radius:12px;padding:12px}
+label{display:block;font-weight:800;margin-bottom:7px}input,textarea{width:100%;background:#0a0d12;color:#eee;border:1px solid #343d4a;border-radius:9px;padding:10px}textarea{min-height:110px;resize:vertical}
+button{width:100%;border:0;border-radius:12px;padding:15px;font-weight:900;font-size:16px;cursor:pointer}.status{white-space:pre-wrap;line-height:1.5}
+.progress{height:12px;background:#252c37;border-radius:99px;overflow:hidden}.bar{height:100%;width:0;background:#67d4ff;transition:.3s}
+small{color:#8d98a6}.ok{color:#7ee787}.err{color:#ff7b72}a{color:#75d5ff;font-weight:900}
+@media(max-width:700px){.grid{grid-template-columns:1fr}.full{grid-column:auto}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="hero"><h1>🎬 Auto Cinematic Editor Cloud</h1><div class="sub">7 BAB • Naskah + Narasi + Gambar • 16:9 • 30 FPS • Auto Motion • Render Cloud</div></div>
+<div class="card"><small>HP-friendly. Tempel naskah langsung ke kotak. BAB tanpa audio + gambar akan dilewati.</small></div>
+<form id="form">
+<div id="chapters"></div>
+<div class="card"><button id="go">🎬 START CINEMATIC RENDER</button></div>
+</form>
+<div class="card"><div class="progress"><div id="bar" class="bar"></div></div><div id="status" class="status">Siap.</div></div>
+</div>
+<script>
+const holder=document.getElementById('chapters');
+for(let n=1;n<=7;n++) holder.insertAdjacentHTML('beforeend',`
+<section class="card"><h2>📖 BAB ${n}</h2><div class="grid">
+<div class="field full"><label>📝 Naskah BAB ${n}</label><textarea name="text_${n}" placeholder="Tempel naskah BAB ${n} di sini..."></textarea></div>
+<div class="field"><label>🎙️ Narasi BAB ${n}</label><input type="file" name="audio_${n}" accept="audio/*"></div>
+<div class="field"><label>🖼️ Gambar BAB ${n}</label><input type="file" name="images_${n}" accept="image/*" multiple><small>Urutan mengikuti nama file.</small></div>
+</div></section>`);
+
+const form=document.getElementById('form'), go=document.getElementById('go'), statusEl=document.getElementById('status'), bar=document.getElementById('bar');
+form.onsubmit=async(e)=>{
+ e.preventDefault();
+ const fd=new FormData(form);
+ let used=0;
+ for(let n=1;n<=7;n++) if(fd.get(`audio_${n}`)?.name && fd.getAll(`images_${n}`).some(f=>f.name)) used++;
+ if(!used){statusEl.innerHTML='<span class="err">Isi minimal satu BAB dengan audio + gambar.</span>';return}
+ go.disabled=true; statusEl.textContent='Mengunggah aset dan memulai render...';
+ try{
+  const r=await fetch('/create',{method:'POST',body:fd});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'Gagal memulai render');
+  poll(j.job_id);
+ }catch(err){statusEl.innerHTML='<span class="err">ERROR: '+err.message+'</span>';go.disabled=false}
+};
+async function poll(id){
+ const r=await fetch('/status/'+id,{cache:'no-store'}), j=await r.json();
+ bar.style.width=(j.progress||0)+'%';
+ if(j.status==='done'){
+   let s='SELESAI ✓\\n\\n';
+   (j.chapters||[]).forEach(c=>s+=`BAB ${c.chapter}: ${c.scenes} scene • ${c.audio_seconds}s\\n`);
+   s+=`\\nFINAL: ${j.final_seconds}s`;
+   statusEl.innerHTML=s.replaceAll('\\n','<br>')+'<br><br><a href="'+j.url+'">⬇️ DOWNLOAD FINAL MP4</a>';
+   go.disabled=false; return;
+ }
+ if(j.status==='error'){statusEl.innerHTML='<span class="err">ERROR: '+(j.error||'Render gagal')+'</span>';go.disabled=false;return}
+ statusEl.textContent='Rendering... '+(j.progress||0)+'%\\n'+(j.chapters||[]).map(c=>`BAB ${c.chapter}: ${c.scenes} scene`).join('\\n');
+ setTimeout(()=>poll(id),2000);
+}
+</script>
+</body>
+</html>
