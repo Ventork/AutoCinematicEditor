@@ -1,0 +1,9 @@
+
+services:
+  - type: web
+    name: auto-cinematic-editor
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
